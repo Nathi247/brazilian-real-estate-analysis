@@ -26,7 +26,7 @@ Many numbers come from simulations under stated assumptions: random-walk prices,
 | Data | The plumbing is right, but there is no data-availability model. The 90 threshold can't be validated as written. MT5 history defaults can cap M5 at about 1.3 years. The bar spread field is a per-bar minimum. Broker time ≠ UTC. Calendars revise "previous". COT can be about 50 days late (2025 shutdown). LLMs know the future of any pre-cutoff date. Fix: a bitemporal PIT store, a backtestable deterministic core, forward collectors from day 1. |
 | Risk / execution | The controls are right. The step between the alert and the trade is missing: order type, tolerance, expiry, management, attribution. On a 12-pip stop at net 2.2R, only 0.9 pip of adverse entry is tolerable. The limits are mis-calibrated for this frequency, and the 3-loss rule fires on noise. Fix: an execution contract, two ledgers, a read-only watchdog, an investor-password login. |
 | Architecture / LLM | The doctrine is right. The LLM sits inside the decision path, so the decision of record can't be backtested. Phase order builds the live stack before any evidence. CrewAI 1.15.23 can't express Opus 5.5's request contract. Reason codes and states are inconsistent. Fix: one pure `decide()` core with two drivers, and the LLM as a post-approval reviewer. |
-| Red team | A strong safety spec around a strategy that doesn't exist. Likely failure modes: zero qualifying signals in a leakage-free backtest, too few signals to test anything, or a spuriously good backtest from researcher degrees of freedom. First OOS evidence comes after about 22–33 weeks (V3 order) versus about 7–10 weeks research-first. Fix: reverse the build order; freeze 2–3 concrete hypotheses with baselines. |
+| Red team | A strong safety spec around a strategy that doesn't exist. Likely failure modes: zero qualifying signals in a leakage-free backtest, too few signals to test anything, or a spuriously good backtest from researcher degrees of freedom. First OOS evidence comes after about 22–33 weeks (V3 order) versus about 7–10 weeks for a minimal research-first scope. Fix: reverse the build order; freeze 2–3 concrete hypotheses with baselines. |
 
 ---
 
@@ -58,7 +58,9 @@ Many numbers come from simulations under stated assumptions: random-walk prices,
 
 ## Consolidated findings
 
-Severity follows the verifier's correction where it differed from the critic's.
+In the finding text, "§N" refers to V3. The "Plan" column refers to sections of `PLAN.md`.
+
+Severities are an editorial consolidation across lenses. Where a verifier explicitly re-rated a finding, that rating is used; otherwise rows are grouped by their impact on this plan. IDs H21–H28 were added in a second verification pass.
 
 ### Critical
 
@@ -75,7 +77,7 @@ Severity follows the verifier's correction where it differed from the critic's.
 
 | ID | Finding | Key evidence | Plan |
 |---|---|---|---|
-| H1 | Build order puts backtesting at P14. | About 22–33 part-time weeks to the first OOS result vs about 7–10 research-first (assumed hours). | §11 |
+| H1 | Build order puts backtesting at P14. | About 22–33 part-time weeks to the first OOS result vs about 7–10 for a minimal research-first scope (assumed hours; the full Stage 1–2 scope in PLAN §11 takes longer). | §11 |
 | H2 | Objectives inconsistent and implausible. | WR 60% at 2R = +0.80R/trade, annual Sharpe ≈ 2.7 at 25 trades a year. WR 68% at 3R = +1.72R, Sharpe ≈ 4.6. FP < 20–30% contradicts a 32–40% loss rate. A real +0.10–0.25R edge at 2R means a WR of about 37–42%. | §10.1 |
 | H3 | **Economic value is small even if the edge is real.** | E × trades × risk = 0.10R × 10 × 0.25% = 0.25%/yr; 0.25R × 25 × 0.25% = 1.56%/yr. | §10.4, §15 |
 | H4 | Trade management undefined. | Break-even, partials, trailing, time stop, Friday and news handling all change WR, average R and holding time, and so swap and event exposure. | §7.3 |
@@ -83,7 +85,6 @@ Severity follows the verifier's correction where it differed from the critic's.
 | H6 | No check of what the human actually placed. | A 0.18 → 1.80 lot typo turns 0.25% risk into about 2.41% at $10k, which is above the 1.5% daily limit in one trade. | §7.5 |
 | H7 | "No auto-execution" is a convention, not a control. | The process holds a trading-capable login and ingests external text. An MT5 investor password is read-only at the broker. | §7.5 |
 | H8 | Limits mis-calibrated for this frequency. | At 0.25%: daily 1.5% = 6R, weekly 3% = 12R, max DD 8% = 32R. A zero-edge strategy hits −8% within 200 trades only about 19% of the time (77% at 0.50% risk). | §7.6 |
-| H9 | The 3-loss rule fires on noise; no recovery condition. | P(≥ 1 run of 3 in 20 trades): 93% at WR 40%, 79% at 50%, 56% at 60%. Expected wait: 9.1 / 14.0 / 24.4 trades. A literal backtest stalls after about 18 trades unless a simulated recovery policy exists. | §7.6 |
 | H10 | No point-in-time knowledge time in the data model. | COT as of Tuesday, released Friday 15:30 ET. H.10 published Mondays 16:15 ET. ECB yields next TARGET day 12:00 CET. US macro values are revised (hence ALFRED). | §6.3 |
 | H11 | MT5 history and time traps. | Default "Max bars in chart" about 100k → M5 about 1.33 yr, M15 about 4 yr. The Python docs say UTC, but users observe broker wall-clock time (e.g. +3h). Calendar archives use the server's current DST for past events. 2026 US/EU DST-mismatch windows: 8–29 Mar and 25 Oct–1 Nov. | §6.1, §6.4 |
 | H12 | Spread baseline undefined. | The bar `spread` field is the per-bar minimum (MQL5 Book, forum tests). The rollover spike inflates a raw 24h mean. A 0.0 raw-account spread breaks naive rules. | §6.4 |
@@ -95,18 +96,23 @@ Severity follows the verifier's correction where it differed from the critic's.
 | H18 | Look-ahead in derived features and regimes. | Full-sample ATR percentiles and smoothed regimes leak future distributions. | §6.3 |
 | H19 | Gap and news risk beyond the planned stop. | Realised loss = (S+g)/S R. A 10-pip overshoot on a 12-pip stop = 1.83R. EURUSD opened about 200 pips higher after the April 2017 French election. | §7.4 |
 | H20 | Time semantics: server vs UTC vs local. | MT5 order expiry is entered in server time. A 2–3h error can trade straight through NFP/CPI. | §6.4, §9 |
+| H21 | The additive score double counts. | RSI14 vs (close−EMA20)/ATR ≈ 0.99 analytically on the same timeframe. Weights are invented. | §7.2 |
+| H22 | Analogue engine (#3) is sparse, noisy and leak-prone. | Null tail at k = 30, p = 1/3: P(WR ≥ 50%) = 4.3%, about 8.7 spurious "strong analogue" readings a year. | §13 |
+| H23 | Regime cells (#4/#5) too small. | 12 cells × 42 trades gives ±0.43R. In #4's own example only Strong vs Range is significant (z = 3.06). | §13 |
+| H24 | Walk-forward lacks purging, embargo and a lockbox, and ignores designer look-ahead. | 2020–2026 is already known to you and to the LLMs you've used. A 3-year EURUSD training window holds about 75 trades. | §10.3 |
+| H25 | Prompt injection via headline text; the §20 schema carries status and confidence fields that invite authority. | Once the LLM has no decision role, the residual risk is misleading text next to authoritative numbers. | §8 |
+| H26 | Kill switch (§31) undefined for a system that doesn't execute. | Pending orders from earlier alerts can still fill; there are no reset levels; the human can keep trading. | §7.6 |
+| H27 | Retail positioning can't be backtested. | Snapshot-only APIs (Myfxbook: 100 req/24h free), broker-specific populations, survivorship. | §6.1 (later) |
+| H28 | Alert template (§37) puts diagnostics before execution data; stale phone alerts look fresh. | About 30 fields; no order type, do-not-chase price, expiry instruction or management plan; an edit doesn't re-notify. | §9 |
 
 ### Medium
 
 | Finding | Plan |
 |---|---|
-| The additive score double counts: RSI14 vs (close−EMA20)/ATR ≈ 0.99 analytically on the same timeframe. Weights are invented. | §7.2 |
-| Analogue engine (#3): sparse, noisy, leak-prone. Null tail at k = 30, p = 1/3: P(WR ≥ 50%) = 4.3%, about 8.7 spurious "strong analogue" readings a year. | §13 |
-| Regime cells (#4/#5) too small: 12 cells × 42 trades gives ±0.43R. In #4's own example only Strong vs Range is significant (z = 3.06). | §13 |
-| Walk-forward lacks purging, embargo and a lockbox, and ignores the designer's look-ahead (2020–2026 is already known to you and to the LLMs). | §10.3 |
 | Costs in R scale as 1/stop size: 1.0 pip = 0.17R on 6 pips, 0.07R on 15 pips. | §5 (stop floor) |
 | Clustered or overlapping trades inflate N: design effect 1 + (m−1)ρ. The six majors are worth about 2.4–4.4 independent pairs. | §10.2 |
 | Winner's curse: at N = 300 and true +0.10R, a passed holdout overstates E by about 95%. | §7.6 |
+| The 3-loss rule fires on noise and has no recovery condition (verifier: MEDIUM — it errs conservative). P(≥ 1 run of 3 in 20 trades): 93% at WR 40%, 79% at 50%, 56% at 60%. A literal backtest stalls at the first 3-loss run (a median of about 18 trades at WR 60%, about 7 at WR 40%) unless a simulated recovery policy exists. | §7.6 |
 | Calibration and shrinkage need small-sample methods (Platt, Beta-binomial with m = 30–50). | §13 |
 | Backtest/live feature parity (train/serve skew) isn't specified. | §6.3 |
 | No historical swap source; triple-swap Wednesday. | §7.4 |
@@ -114,7 +120,6 @@ Severity follows the verifier's correction where it differed from the critic's.
 | Portfolio/correlation engine is over-built for EURUSD-only. A 60-day correlation at a true 0.70 has a 95% CI of [0.54, 0.81]. | §7.7 |
 | Telegram retry can duplicate an alert (no idempotency key); edits don't re-notify. | §9 |
 | Deposits, withdrawals and broker credit corrupt drawdown. | §7.6 |
-| Prompt injection via headline text; the §20 schema carries status and confidence fields that invite authority. | §8 |
 | pandas-ta can't be installed with numpy 2.5 (numba 0.61.2 requires numpy < 2.3). | §7.1 |
 | §3 says "Python 3.11+", but numpy 2.5.3 needs ≥ 3.12. | §14 |
 | False precision in ChatGPT's examples. "184 similar, 63.6%" has a Wilson CI of [56.4%, 70.2%], and its +0.48R implies an average win of 1.33R, below the 2R floor (under binary exits). | §9, §13 |
@@ -155,7 +160,7 @@ Severity follows the verifier's correction where it differed from the critic's.
 
 ## The ChatGPT additions in one line
 
-They have the right instinct: evidence ≠ probability, ablation, calibration, cost stress, champion/challenger, replay. But most of them **add thresholds, which is the opposite of #29**, and several make LLM output a decision input that can't be backtested. PLAN §13 gives each one KEEP / MODIFY / DEFER / DROP with a reason. Across lenses: #2, #6, #18, #21, #22, #27, #28 and #29 were kept by everyone; #10 and #16 were dropped or deferred by most; #3, #5, #13, #19, #23 and #24 were deferred (or dropped) by most.
+They have the right instinct: evidence ≠ probability, ablation, calibration, cost stress, champion/challenger, replay. But most of them **add thresholds, which is the opposite of #29**, and several make LLM output a decision input that can't be backtested. PLAN §13 gives each one KEEP / MODIFY / DEFER / DROP with a reason. Across lenses: #6, #18, #21, #22, #27 and #28 were kept by every lens; #2 and #29 by every critic, with verifiers asking for modifications; #10 was dropped by most; #16's invented decay curve was dropped, but verifiers asked for an empirically measured expectancy-vs-delay rule instead (MODIFY); #5 was deferred by most; #3, #13, #19, #23 and #24 split evenly between MODIFY and DEFER/DROP.
 
 ---
 
